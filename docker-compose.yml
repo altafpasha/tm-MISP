@@ -72,7 +72,7 @@ services:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
     ports:
-      - "8080:80"
+      - "8071:80"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
       interval: 30s
