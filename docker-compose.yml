@@ -102,6 +102,7 @@ services:
       - traefik.http.routers.misp.tls=true
       - traefik.http.routers.misp.tls.certresolver=letsencrypt
       - traefik.http.services.misp.loadbalancer.server.port=80
+      
     healthcheck:
       test: ["CMD", "curl", "-k", "-f", "https://localhost"]
       interval: 30s
