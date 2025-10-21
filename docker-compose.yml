@@ -22,11 +22,13 @@ services:
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
+      --max_allowed_packet=64M
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 30s
 
   redis:
     image: redis:7-alpine
@@ -35,6 +37,7 @@ services:
     platform: linux/arm64
     networks:
       - coolify
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -64,10 +67,11 @@ services:
       AWS_REGION: ${AWS_REGION}
       AWS_S3_URL: ${AWS_S3_URL}
     healthcheck:
-      test: ["CMD", "ls", "/mnt/s3"]
+      test: ["CMD", "mountpoint", "-q", "/mnt/s3"]
       interval: 30s
       timeout: 10s
       retries: 3
+      start_period: 10s
 
   misp:
     image: codesec/misp-core:arm64
@@ -77,9 +81,12 @@ services:
     networks:
       - coolify
     depends_on:
-      - misp-db
-      - redis
-      - s3fs
+      misp-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      s3fs:
+        condition: service_healthy
     environment:
       MYSQL_HOST: misp-db
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -91,23 +98,48 @@ services:
       MISP_ORG: ${MISP_ORG}
       MISP_ADMIN_EMAIL: ${MISP_EMAIL}
       MISP_ADMIN_PASSPHRASE: ${MISP_ADMIN_PASSPHRASE}
+      # Disable IPv6 if causing connection issues
+      PHP_ENABLE_IPV6: 0
     volumes:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
+      - ./logs/misp:/var/www/MISP/app/tmp/logs
     labels:
+      # Enable Traefik
       - traefik.enable=true
       - traefik.docker.network=coolify
+      
+      # HTTP Router (redirect to HTTPS)
+      - traefik.http.routers.misp-http.rule=Host(`misp.codesec.me`)
+      - traefik.http.routers.misp-http.entrypoints=web
+      - traefik.http.routers.misp-http.middlewares=misp-redirect
+      
+      # HTTPS Router
       - traefik.http.routers.misp.rule=Host(`misp.codesec.me`)
-      - traefik.http.routers.misp.entrypoints=http,https
+      - traefik.http.routers.misp.entrypoints=websecure
       - traefik.http.routers.misp.tls=true
-      - traefik.http.routers.misp.tls.certresolver=letsencrypt
+      - traefik.http.routers.misp.tls.certresolver=myresolver
+      
+      # Service
       - traefik.http.services.misp.loadbalancer.server.port=80
+      - traefik.http.services.misp.loadbalancer.server.scheme=http
+      
+      # Middleware - Redirect HTTP to HTTPS
+      - traefik.http.middlewares.misp-redirect.redirectscheme.scheme=https
+      - traefik.http.middlewares.misp-redirect.redirectscheme.permanent=true
       
     healthcheck:
-      test: ["CMD", "curl", "-k", "-f", "https://localhost"]
+      test: ["CMD", "curl", "-f", "http://localhost/users/login", "-o", "/dev/null", "-s", "-w", "%{http_code}\n"]
       interval: 30s
       timeout: 10s
       retries: 5
+      start_period: 60s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   s3-mount:
+    driver: local
