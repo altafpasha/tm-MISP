@@ -112,22 +112,22 @@ services:
       # HTTP Router (redirect to HTTPS)
       - traefik.http.routers.misp-http.rule=Host(`misp.codesec.me`)
       - traefik.http.routers.misp-http.entrypoints=http
-      - traefik.http.routers.misp-http.middlewares=redirect-to-https
+      - traefik.http.routers.misp-http.middlewares=misp-redirect-https
       
       # HTTPS Router
       - traefik.http.routers.misp-https.rule=Host(`misp.codesec.me`)
       - traefik.http.routers.misp-https.entrypoints=https
       - traefik.http.routers.misp-https.tls=true
       - traefik.http.routers.misp-https.tls.certresolver=letsencrypt
-      - traefik.http.routers.misp-https.service=misp
+      - traefik.http.routers.misp-https.service=misp-svc
       
       # Service
-      - traefik.http.services.misp.loadbalancer.server.port=80
-      - traefik.http.services.misp.loadbalancer.server.scheme=http
+      - traefik.http.services.misp-svc.loadbalancer.server.port=80
+      - traefik.http.services.misp-svc.loadbalancer.server.scheme=http
       
-      # Middleware - Redirect HTTP to HTTPS (use Coolify's built-in)
-      - traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https
-      - traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true
+      # Middleware - Redirect HTTP to HTTPS (unique name for MISP)
+      - traefik.http.middlewares.misp-redirect-https.redirectscheme.scheme=https
+      - traefik.http.middlewares.misp-redirect-https.redirectscheme.permanent=true
       
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/users/login", "-o", "/dev/null", "-s", "-w", "%{http_code}\n"]
