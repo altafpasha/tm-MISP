@@ -1,59 +1,104 @@
+version: '3'
 services:
-  misp-db:
-    image: mariadb:10.6
-    container_name: misp-db
-    restart: always
+  # This is capable to relay via gmail, Amazon SES, or generic relays
+  # See: https://hub.docker.com/r/ixdotai/smtp
+  mail:
+    image: ixdotai/smtp
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: misp
-      MYSQL_USER: misp
-      MYSQL_PASSWORD: misp_pass
-    volumes:
-      - ./data/db:/var/lib/mysql
+      - "SMARTHOST_ADDRESS=${SMARTHOST_ADDRESS}"
+      - "SMARTHOST_PORT=${SMARTHOST_PORT}"
+      - "SMARTHOST_USER=${SMARTHOST_USER}"
+      - "SMARTHOST_PASSWORD=${SMARTHOST_PASSWORD}"
+      - "SMARTHOST_ALIASES=${SMARTHOST_ALIASES}"
 
-  s3fs:
-    image: codesec/s3fs:latest
-    container_name: s3fs
+  redis:
+    image: redis:7.2
+
+  db:
+    # We use MariaDB because it supports ARM and has the expected collations
+    image: mariadb:10.11
     restart: always
     environment:
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
-      AWS_REGION: ${AWS_REGION}
-      AWS_S3_URL: ${AWS_S3_URL}
-    cap_add:
-      - SYS_ADMIN
-    devices:
-      - /dev/fuse
-    security_opt:
-      - apparmor:unconfined
+      - "MYSQL_USER=${MYSQL_USER:-misp}"
+      - "MYSQL_PASSWORD=${MYSQL_PASSWORD:-example}"
+      - "MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD:-password}"
+      - "MYSQL_DATABASE=${MYSQL_DATABASE:-misp}"
     volumes:
-      - ./data/s3fs-cache:/tmp/s3cache
-      - s3-mount:/mnt/s3
+      - mysql_data:/var/lib/mysql
+    cap_add:
+      - SYS_NICE  # CAP_SYS_NICE Prevent runaway mysql log
 
   misp:
-    image: harvarditsecurity/misp:latest
-    container_name: misp
-    restart: always
+    image: codesec/misp-core:arm64
+    build:
+      context: server/.
+      args:
+          - MISP_TAG=${MISP_TAG}
+          - MISP_COMMIT=${MISP_COMMIT}
+          - PHP_VER=${PHP_VER}
+          - PYPI_REDIS_VERSION=${PYPI_REDIS_VERSION}
+          - PYPI_LIEF_VERSION=${PYPI_LIEF_VERSION}
+          - PYPI_PYDEEP2_VERSION=${PYPI_PYDEEP2_VERSION}
+          - PYPI_PYTHON_MAGIC_VERSION=${PYPI_PYTHON_MAGIC_VERSION}
+          - PYPI_MISP_LIB_STIX2_VERSION=${PYPI_MISP_LIB_STIX2_VERSION}
+          - PYPI_MAEC_VERSION=${PYPI_MAEC_VERSION}
+          - PYPI_MIXBOX_VERSION=${PYPI_MIXBOX_VERSION}
+          - PYPI_CYBOX_VERSION=${PYPI_CYBOX_VERSION}
+          - PYPI_PYMISP_VERSION=${PYPI_PYMISP_VERSION}
     depends_on:
-      - misp-db
-      - s3fs
-    environment:
-      MYSQL_HOST: misp-db
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MISP_BASEURL: ${MISP_BASEURL}
-      MISP_EMAIL: ${MISP_EMAIL}
-      MISP_ORG: ${MISP_ORG}
-      MISP_ADMIN_EMAIL: ${MISP_EMAIL}
-      MISP_ADMIN_PASSPHRASE: "SuperSecureAdminPass123"
+      - redis
+      - db
     ports:
-      - "8080:80"
+      - "8070:80"
       - "8443:443"
     volumes:
-      - s3-mount:/var/www/MISP/app/files
-      - ./misp:/var/www/MISP/custom
+      - "./configs/:/var/www/MISP/app/Config/"
+      - "./logs/:/var/www/MISP/app/tmp/logs/"
+      - "./files/:/var/www/MISP/app/files/"
+      - "./ssl/:/etc/nginx/certs/"
+      - "./gnupg/:/var/www/MISP/.gnupg/"
+      # customize by replacing ${CUSTOM_PATH} with a path containing 'files/customize_misp.sh'
+      # - "${CUSTOM_PATH}/:/custom/"
+    environment:
+      - "HOSTNAME=${HOSTNAME}"
+      - "CRON_USER_ID=${CRON_USER_ID}"
+      - "DISABLE_IPV6=${DISABLE_IPV6}"
+      # standard settings
+      - "ADMIN_EMAIL=${ADMIN_EMAIL}"
+      - "ADMIN_PASSWORD=${ADMIN_PASSWORD}"
+      - "ADMIN_KEY=${ADMIN_KEY}"
+      - "ADMIN_ORG=${ADMIN_ORG}"
+      - "GPG_PASSPHRASE=${GPG_PASSPHRASE}"
+      # sync server settings (see https://www.misp-project.org/openapi/#tag/Servers for more options)
+      - "SYNCSERVERS=${SYNCSERVERS}"
+      - |
+        SYNCSERVERS_1_DATA=
+        {
+          "remote_org_uuid": "${SYNCSERVERS_1_UUID}",
+          "name": "${SYNCSERVERS_1_NAME}",
+          "authkey": "${SYNCSERVERS_1_KEY}",
+          "url": "${SYNCSERVERS_1_URL}",
+          "pull": true
+        }
+      # mysql settings
+      - "MYSQL_HOST=${MYSQL_HOST:-db}"
+      - "MYSQL_PORT=${MYSQL_PORT:-3306}"
+      - "MYSQL_USER=${MYSQL_USER:-misp}"
+      - "MYSQL_PASSWORD=${MYSQL_PASSWORD:-example}"
+      - "MYSQL_DATABASE=${MYSQL_DATABASE:-misp}"
+  
+  misp-modules:
+    image: codesec/misp-modules:arm64
+    build:
+      context: modules/.
+      args:
+        - MODULES_TAG=${MODULES_TAG}
+        - MODULES_COMMIT=${MODULES_COMMIT}
+        - LIBFAUP_COMMIT=${LIBFAUP_COMMIT}
+    environment:
+      - "REDIS_BACKEND=redis"
+    depends_on:
+      - redis
 
 volumes:
-  s3-mount:
+    mysql_data:

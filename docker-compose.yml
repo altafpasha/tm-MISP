@@ -74,7 +74,7 @@ services:
       start_period: 10s
 
   misp:
-    image: codesec/misp:latest
+    image: codesec/misp-core:arm64
     container_name: misp
     restart: unless-stopped
     platform: linux/arm64
@@ -118,6 +118,26 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  misp-modules:
+    image: codesec/misp-modules:arm64
+    container_name: misp-modules
+    restart: unless-stopped
+    platform: linux/arm64
+    networks:
+      - coolify
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      REDIS_BACKEND: redis
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 volumes:
   s3-mount:
+    driver: local
+  mysql_data:
     driver: local
