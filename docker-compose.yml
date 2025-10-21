@@ -63,7 +63,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MISP_BASEURL: ${MISP_BASEURL}
+      MISP_BASEURL: http://localhost:8080
       MISP_EMAIL: ${MISP_EMAIL}
       MISP_ORG: ${MISP_ORG}
       MISP_ADMIN_EMAIL: ${MISP_EMAIL}
@@ -71,11 +71,8 @@ services:
     volumes:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
-    labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.misp.rule=Host(`misp.codesec.me`)"
-      - "traefik.http.routers.misp.entrypoints=web"  # ✅ Coolify uses its managed HTTPS
-      - "traefik.http.services.misp.loadbalancer.server.port=80"
+    ports:
+      - "8080:80"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost"]
       interval: 30s
