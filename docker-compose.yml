@@ -1,4 +1,5 @@
 version: "3.9"
+
 networks:
   coolify:
     external: true
@@ -89,7 +90,7 @@ services:
       MISP_EMAIL: ${MISP_EMAIL}
       MISP_ORG: ${MISP_ORG}
       MISP_ADMIN_EMAIL: ${MISP_EMAIL}
-      MISP_ADMIN_PASSPHRASE: "SuperSecureAdminPass123"
+      MISP_ADMIN_PASSPHRASE: ${MISP_ADMIN_PASSPHRASE}
     volumes:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
@@ -101,6 +102,11 @@ services:
       - traefik.http.routers.misp.tls=true
       - traefik.http.routers.misp.tls.certresolver=letsencrypt
       - traefik.http.services.misp.loadbalancer.server.port=80
+    healthcheck:
+      test: ["CMD", "curl", "-k", "-f", "https://localhost"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 volumes:
   s3-mount:
