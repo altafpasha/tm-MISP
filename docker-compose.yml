@@ -80,6 +80,9 @@ services:
     platform: linux/arm64
     networks:
       - coolify
+    ports:
+      - "8070:80"
+      - "8443:443"
     depends_on:
       misp-db:
         condition: service_healthy
@@ -93,42 +96,16 @@ services:
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
       REDIS_HOST: redis
-      MISP_BASEURL: https://misp.codesec.me
+      MISP_BASEURL: http://localhost:8080
       MISP_EMAIL: ${MISP_EMAIL}
       MISP_ORG: ${MISP_ORG}
       MISP_ADMIN_EMAIL: ${MISP_EMAIL}
       MISP_ADMIN_PASSPHRASE: ${MISP_ADMIN_PASSPHRASE}
-      # Disable IPv6 if causing connection issues
       PHP_ENABLE_IPV6: 0
     volumes:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
       - ./logs/misp:/var/www/MISP/app/tmp/logs
-    labels:
-      # Enable Traefik
-      - traefik.enable=true
-      - traefik.docker.network=coolify
-      
-      # HTTP Router (redirect to HTTPS)
-      - traefik.http.routers.misp-http.rule=Host(`misp.codesec.me`)
-      - traefik.http.routers.misp-http.entrypoints=http
-      - traefik.http.routers.misp-http.middlewares=misp-redirect-https
-      
-      # HTTPS Router
-      - traefik.http.routers.misp-https.rule=Host(`misp.codesec.me`)
-      - traefik.http.routers.misp-https.entrypoints=https
-      - traefik.http.routers.misp-https.tls=true
-      - traefik.http.routers.misp-https.tls.certresolver=letsencrypt
-      - traefik.http.routers.misp-https.service=misp-svc
-      
-      # Service
-      - traefik.http.services.misp-svc.loadbalancer.server.port=80
-      - traefik.http.services.misp-svc.loadbalancer.server.scheme=http
-      
-      # Middleware - Redirect HTTP to HTTPS (unique name for MISP)
-      - traefik.http.middlewares.misp-redirect-https.redirectscheme.scheme=https
-      - traefik.http.middlewares.misp-redirect-https.redirectscheme.permanent=true
-      
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/users/login", "-o", "/dev/null", "-s", "-w", "%{http_code}\n"]
       interval: 30s
