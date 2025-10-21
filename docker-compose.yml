@@ -101,7 +101,7 @@ services:
       MISP_ORG: ${MISP_ORG}
       MISP_ADMIN_EMAIL: ${MISP_EMAIL}
       MISP_ADMIN_PASSPHRASE: ${MISP_ADMIN_PASSPHRASE}
-      PHP_ENABLE_IPV6: 0
+      PHP_ENABLE_IPV6: ${PHP_ENABLE_IPV6}
     volumes:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
