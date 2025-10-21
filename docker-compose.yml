@@ -55,7 +55,7 @@ services:
       - ./misp:/var/www/MISP/custom
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.misp.rule=Host(`misp.threatmonitor.live`)"
+      - "traefik.http.routers.misp.rule=Host(`misp.codesec.me`)"
       - "traefik.http.routers.misp.entrypoints=websecure"
       - "traefik.http.routers.misp.tls.certresolver=myresolver"
       - "traefik.http.services.misp.loadbalancer.server.port=80"
