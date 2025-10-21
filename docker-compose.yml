@@ -22,6 +22,18 @@ services:
       timeout: 10s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: always
+    platform: linux/arm64
+    command: ["redis-server", "--requirepass", "redispassword"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   s3fs:
     image: codesec/s3fs:latest
     container_name: s3fs
@@ -56,6 +68,8 @@ services:
     depends_on:
       misp-db:
         condition: service_healthy
+      redis:
+        condition: service_healthy
       s3fs:
         condition: service_healthy
     environment:
@@ -68,6 +82,8 @@ services:
       MISP_ORG: ${MISP_ORG}
       MISP_ADMIN_EMAIL: ${MISP_EMAIL}
       MISP_ADMIN_PASSPHRASE: "SuperSecureAdminPass123"
+      REDIS_HOST: redis
+      REDIS_PASSWORD: redispassword
     volumes:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
