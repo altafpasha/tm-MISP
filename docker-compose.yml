@@ -1,18 +1,23 @@
-version: '3.8'
+version: "3.9"
+networks:
+  coolify:
+    external: true
 
 services:
   misp-db:
     image: mariadb:10.6
     container_name: misp-db
-    restart: always
+    restart: unless-stopped
     platform: linux/arm64
+    networks:
+      - coolify
+    volumes:
+      - ./data/db:/var/lib/mysql
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    volumes:
-      - ./data/db:/var/lib/mysql
     command: >
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
@@ -25,8 +30,10 @@ services:
   redis:
     image: redis:7-alpine
     container_name: redis
-    restart: always
+    restart: unless-stopped
     platform: linux/arm64
+    networks:
+      - coolify
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
@@ -36,14 +43,10 @@ services:
   s3fs:
     image: codesec/s3fs:latest
     container_name: s3fs
-    restart: always
+    restart: unless-stopped
     platform: linux/arm64
-    environment:
-      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
-      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
-      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
-      AWS_REGION: ${AWS_REGION}
-      AWS_S3_URL: ${AWS_S3_URL}
+    networks:
+      - coolify
     cap_add:
       - SYS_ADMIN
     devices:
@@ -53,6 +56,12 @@ services:
     volumes:
       - ./data/s3fs-cache:/tmp/s3cache
       - s3-mount:/mnt/s3
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_URL: ${AWS_S3_URL}
     healthcheck:
       test: ["CMD", "ls", "/mnt/s3"]
       interval: 30s
@@ -62,15 +71,14 @@ services:
   misp:
     image: codesec/misp-core:arm64
     container_name: misp
-    restart: always
+    restart: unless-stopped
     platform: linux/arm64
+    networks:
+      - coolify
     depends_on:
-      misp-db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      s3fs:
-        condition: service_healthy
+      - misp-db
+      - redis
+      - s3fs
     environment:
       MYSQL_HOST: misp-db
       MYSQL_DATABASE: ${MYSQL_DATABASE}
@@ -86,17 +94,13 @@ services:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
     labels:
-      - "traefik.enable=true"
-      - "traefik.http.routers.misp.rule=Host(`misp.codesec.me`)"
-      - "traefik.http.routers.misp.entrypoints=https"
-      - "traefik.http.routers.misp.tls=true"
-      - "traefik.http.routers.misp.tls.certresolver=letsencrypt"
-      - "traefik.http.services.misp.loadbalancer.server.port=80"
-    healthcheck:
-      test: ["CMD", "curl", "-k", "-f", "https://localhost"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
+      - traefik.enable=true
+      - traefik.docker.network=coolify
+      - traefik.http.routers.misp.rule=Host(`misp.codesec.me`)
+      - traefik.http.routers.misp.entrypoints=http,https
+      - traefik.http.routers.misp.tls=true
+      - traefik.http.routers.misp.tls.certresolver=letsencrypt
+      - traefik.http.services.misp.loadbalancer.server.port=80
 
 volumes:
   s3-mount:
