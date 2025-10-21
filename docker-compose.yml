@@ -1,0 +1,64 @@
+version: '3.8'
+
+services:
+  misp-db:
+    image: mariadb:10.6
+    container_name: misp-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+    volumes:
+      - ./data/db:/var/lib/mysql
+
+  s3fs:
+    image: codesec/s3fs:latest
+    container_name: s3fs
+    restart: always
+    environment:
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
+      AWS_REGION: ${AWS_REGION}
+      AWS_S3_URL: ${AWS_S3_URL}
+    cap_add:
+      - SYS_ADMIN
+    devices:
+      - /dev/fuse
+    security_opt:
+      - apparmor:unconfined
+    volumes:
+      - ./data/s3fs-cache:/tmp/s3cache
+      - s3-mount:/mnt/s3
+
+  misp:
+    image: harvarditsecurity/misp:latest
+    container_name: misp
+    restart: always
+    depends_on:
+      - misp-db
+      - s3fs
+    environment:
+      MYSQL_HOST: misp-db
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MISP_BASEURL: ${MISP_BASEURL}
+      MISP_EMAIL: ${MISP_EMAIL}
+      MISP_ORG: ${MISP_ORG}
+      MISP_ADMIN_EMAIL: ${MISP_EMAIL}
+      MISP_ADMIN_PASSPHRASE: "SuperSecureAdminPass123"
+    volumes:
+      - s3-mount:/var/www/MISP/app/files
+      - ./misp:/var/www/MISP/custom
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.misp.rule=Host(`misp.threatmonitor.live`)"
+      - "traefik.http.routers.misp.entrypoints=websecure"
+      - "traefik.http.routers.misp.tls.certresolver=myresolver"
+      - "traefik.http.services.misp.loadbalancer.server.port=80"
+
+volumes:
+  s3-mount:
