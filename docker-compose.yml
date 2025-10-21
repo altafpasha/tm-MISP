@@ -27,9 +27,8 @@ services:
     container_name: redis
     restart: always
     platform: linux/arm64
-    command: ["redis-server", "--requirepass", "redispassword"]
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "redispassword", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 30s
       timeout: 10s
       retries: 5
@@ -77,20 +76,24 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-      MISP_BASEURL: http://localhost:8080
+      REDIS_HOST: redis
+      MISP_BASEURL: https://misp.codesec.me
       MISP_EMAIL: ${MISP_EMAIL}
       MISP_ORG: ${MISP_ORG}
       MISP_ADMIN_EMAIL: ${MISP_EMAIL}
       MISP_ADMIN_PASSPHRASE: "SuperSecureAdminPass123"
-      REDIS_HOST: redis
-      REDIS_PASSWORD: redispassword
     volumes:
       - s3-mount:/var/www/MISP/app/files
       - ./misp:/var/www/MISP/custom
-    ports:
-      - "8071:80"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.misp.rule=Host(`misp.codesec.me`)"
+      - "traefik.http.routers.misp.entrypoints=https"
+      - "traefik.http.routers.misp.tls=true"
+      - "traefik.http.routers.misp.tls.certresolver=letsencrypt"
+      - "traefik.http.services.misp.loadbalancer.server.port=80"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost"]
+      test: ["CMD", "curl", "-k", "-f", "https://localhost"]
       interval: 30s
       timeout: 10s
       retries: 5
