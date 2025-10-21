@@ -74,7 +74,7 @@ services:
       start_period: 10s
 
   misp:
-    image: docker pull codesec/misp:latest
+    image: codesec/misp:latest
     container_name: misp
     restart: unless-stopped
     platform: linux/arm64
